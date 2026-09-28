@@ -47,10 +47,10 @@ inputs:
     description: 'Log format on stderr: text or json'
     default: text
   version:
-    description: 'cadenya-config release to download. Defaults to the release this action revision belongs to; change it only to run a different release on purpose'
-    default: '0.1.2'
+    description: 'Cadenya CLI release containing cadenya config; required unless binary-path is set'
+    required: false
   binary-path:
-    description: 'Path to a cadenya-config binary to run instead of downloading a release, for runners without internet access or for testing a build'
+    description: 'Path to a cadenya CLI binary to run instead of downloading a release'
     required: false
 outputs:
   result:
@@ -77,7 +77,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install cadenya-config
+    - name: Install cadenya CLI
       id: install
       shell: bash
       env:
@@ -92,7 +92,7 @@ runs:
           exit 0
         fi
         version="${CADENYA_VERSION#v}"
-        [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || fail "version must look like 1.2.3, got '$CADENYA_VERSION'"
+        [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || fail "version must look like 1.2.3, got '$CADENYA_VERSION'; set version or binary-path"
         exe=""
         case "$RUNNER_OS" in
           Linux) os=linux ext=tar.gz ;;
@@ -105,16 +105,16 @@ runs:
           ARM64) arch=arm64 ;;
           *) fail "unsupported runner architecture $RUNNER_ARCH" ;;
         esac
-        dir="$RUNNER_TEMP/cadenya-config-$version-$os-$arch"
-        binary="$dir/cadenya-config$exe"
+        dir="$RUNNER_TEMP/cadenya-$version-$os-$arch"
+        binary="$dir/cadenya$exe"
         # A second use of the action in the same job reuses the download.
         if [[ ! -f "$binary" ]]; then
-          archive="cadenya-config_${version}_${os}_${arch}.${ext}"
-          base="https://github.com/cadenya/cadenya-config-loader/releases/download/v$version"
+          archive="cadenya_${version}_${os}_${arch}.${ext}"
+          base="https://github.com/cadenya/cadenya-cli/releases/download/v$version"
           mkdir -p "$dir"
           cd "$dir"
           curl -fsSL --retry 3 --retry-connrefused -o "$archive" "$base/$archive" || fail "could not download $base/$archive"
-          curl -fsSL --retry 3 --retry-connrefused -o checksums.txt "$base/checksums.txt" || fail "could not download $base/checksums.txt"
+          curl -fsSL --retry 3 --retry-connrefused -o checksums.txt "$base/cadenya_${version}_checksums.txt" || fail "could not download $base/cadenya_${version}_checksums.txt"
           expected="$(awk -v f="$archive" '$2 == f {print $1}' checksums.txt)"
           [[ -n "$expected" ]] || fail "checksums.txt has no entry for $archive"
           if command -v sha256sum >/dev/null; then
@@ -125,18 +125,18 @@ runs:
           [[ "$actual" == "$expected" ]] || fail "checksum mismatch for $archive"
           if [[ "$ext" == zip ]]; then
             if command -v unzip >/dev/null; then
-              unzip -q -o "$archive" "cadenya-config$exe"
+              unzip -q -o "$archive" "cadenya$exe"
             else
               powershell -NoProfile -Command "Expand-Archive -Force -LiteralPath '$archive' -DestinationPath ."
             fi
           else
-            tar -xzf "$archive" cadenya-config
+            tar -xzf "$archive" cadenya
           fi
           rm -f "$archive" checksums.txt
         fi
         "$binary" --version
         printf 'binary=%s\n' "$binary" >> "$GITHUB_OUTPUT"
-    - name: Run cadenya-config
+    - name: Run cadenya config
       id: run
       shell: bash
       env:
@@ -155,4 +155,4 @@ runs:
         INPUT_RETRIES: ${{ inputs.retries }}
         INPUT_LOG_LEVEL: ${{ inputs.log-level }}
         INPUT_LOG_FORMAT: ${{ inputs.log-format }}
-      run: '"$CADENYA_BINARY" github-action'
+      run: '"$CADENYA_BINARY" config github-action'
