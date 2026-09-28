@@ -41,6 +41,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          args=(--repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$GITHUB_REF_NAME")
+          # Release notes are the CHANGELOG.md section for this tag.
+          awk -v tag="$GITHUB_REF_NAME" 'index($0, "## " tag " ") == 1 || $0 == "## " tag {found=1; next} found && /^## / {exit} found {print}' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [[ ! -s "$RUNNER_TEMP/notes.md" ]]; then
+            echo "::error::CHANGELOG.md has no section for $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          args=(--repo "$GITHUB_REPOSITORY" --verify-tag --notes-file "$RUNNER_TEMP/notes.md" --title "$GITHUB_REF_NAME")
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then args+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.zip dist/checksums.txt "${args[@]}"

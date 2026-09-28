@@ -30,8 +30,9 @@ Before a release, verify:
 
 1. Choose a semantic version. Before 1.0, document breaking changes in the minor
    release notes. After 1.0, breaking CLI or report changes require a major release.
-2. Commit the release notes and reviewed changes, then push a `vX.Y.Z` tag pointing
-   at that commit. A prerelease tag such as `v0.1.0-rc.1` creates a prerelease.
+2. Add a `## vX.Y.Z (YYYY-MM-DD)` section to `CHANGELOG.md`. The release workflow
+   publishes that section as the release notes, and fails if it's missing. Commit
+   it with the reviewed changes, then push a `vX.Y.Z` tag pointing at that commit. A prerelease tag such as `v0.1.0-rc.1` creates a prerelease.
 3. The release workflow reruns verification, builds archives, creates checksums,
    generates GitHub provenance attestations, and publishes the GitHub release.
 4. Inspect the published assets and verify a downloaded archive and attestation.

@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 (2026-09-27)
+
+The first release. `cadenya-config` validates, plans, and applies a Cadenya
+workspace bundle from YAML, as a CLI and as a GitHub Action.
 
 - CLI built on urfave/cli v3 and the Cadenya Go SDK.
 - Strict YAML loading, local references, and bundle ownership labels.
