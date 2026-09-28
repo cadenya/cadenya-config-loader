@@ -57,7 +57,7 @@ Read it. Then apply:
 ./cadenya-config -C examples/basic apply --workspace-id development
 ```
 
-Apply prints the same list and ends with `Applied: 9 create, 0 update, 0 delete, 0 detach, 1 state change`. The widget line carries the host to embed, like `create    widget support-chat (h2w5nrzmpn4f.widgets.cadenya.com)`. Meanwhile stderr gets a [log line](#logs-and-exit-codes) for each write as it lands.
+Apply prints the same list and ends with `Applied: 9 create, 0 update, 0 delete, 0 detach, 1 state change`. The widget line carries the host to embed, like `create    widget support-chat (x7k2m9qd4wbn.widgets.cadenya.com)`. Meanwhile stderr gets a [log line](#logs-and-exit-codes) for each write as it lands.
 
 The API key needs `agents:manage`, `tools:manage`, `memory:manage`, and `widgets:manage`, plus the matching `:read` scopes. Plan needs only the four read scopes. A missing scope fails with `SCOPE_MISSING` and names both the scope Cadenya wanted (`required_scope=widgets:manage`) and the ones the key has.
 
@@ -261,7 +261,7 @@ spec:
 
 `modelId` is a reference key: your AI provider key's external ID, a dot, then the model's external ID. Or use its canonical `model_` ID. The model's external ID has no dots of its own, so GPT-4.1 is `openai-gpt-4-1`, not `gpt-4.1`. **`openai.gpt-4.1` fails, and validate tells you so before apply can.**
 
-The provider key's external ID depends on your workspace. `getting-started-key` is the one in this example's workspace, so swap in yours. Listing models needs the `models:read` scope.
+Every Cadenya account starts with a provider key whose external ID is `getting-started-key`, so the example works as written. A provider key you add has its own external ID. To see the models a workspace can use, list them (that takes the `models:read` scope).
 
 ### Memory layer
 
@@ -438,7 +438,7 @@ So a `2` is something to fix in the pipeline, and a `1` is something to fix in t
 stdout carries the result (text, or JSON with `--output json`). stderr carries structured logs from Go's `log/slog`: one line when the bundle loads, one when the plan is ready, and one per write, with its action, resource, canonical ID, and duration. A failed write logs at `ERROR` with how many operations finished and how many didn't. Here's a widget landing:
 
 ```
-level=INFO msg="operation succeeded" command=apply bundle=support-tools workspace=development action=create kind=widget resource="widget support-chat" id=wgt_01M3JKX30GC81FGRDG0ZH0QP0H duration_ms=362 host=h2w5nrzmpn4f.widgets.cadenya.com
+level=INFO msg="operation succeeded" command=apply bundle=support-tools workspace=development action=create kind=widget resource="widget support-chat" id=wgt_01HXKD2E5NQM3T9AYWCF4BXRZE duration_ms=362 host=x7k2m9qd4wbn.widgets.cadenya.com
 ```
 
 `--log-level` takes `debug`, `info` (the default), `warn`, or `error`. `debug` adds each ownership check and each operation as it starts. `--log-format json` gives your log pipeline one JSON object per line. Both also read `CADENYA_LOG_LEVEL` and `CADENYA_LOG_FORMAT`. Logs pass through a filter that replaces the API key with `[REDACTED]`, so it can't reach stderr even inside an error message.

@@ -9,6 +9,7 @@ import (
 	cadenya "go.cadenya.com/cadenya-go"
 )
 
+// remote is a bundle resource as the API reports it.
 type remote struct {
 	Key      config.Key
 	ID       string
@@ -17,8 +18,11 @@ type remote struct {
 	State    string // Agents only, as the API reports it (e.g. STATE_PUBLISHED).
 }
 
+// inventory is every resource in the workspace that carries the bundle label.
 type inventory map[config.Key]*remote
 
+// add records a listed resource, refusing anything the plan couldn't
+// identify or doesn't own.
 func (s inventory) add(kind config.Kind, parent, parentID, bundle string, meta *cadenya.ResourceMetadata, spec any, state string) error {
 	if meta == nil || meta.ID == "" || meta.ExternalID == "" {
 		return fmt.Errorf("listed %s has no canonical or external ID; refusing to reconcile ambiguous resources", kind)
@@ -34,6 +38,7 @@ func (s inventory) add(kind config.Kind, parent, parentID, bundle string, meta *
 	return nil
 }
 
+// all follows a list response through every page.
 func all[T any](ctx context.Context, page *cadenya.Page[T], err error) ([]T, error) {
 	if err != nil {
 		return nil, err
@@ -65,6 +70,8 @@ func all[T any](ctx context.Context, page *cadenya.Page[T], err error) ([]T, err
 	return nil, fmt.Errorf("API returned an empty continuation page")
 }
 
+// snapshot lists every resource that carries the bundle label, archived ones
+// included.
 func snapshot(ctx context.Context, client *cadenya.Client, bundle string) (inventory, error) {
 	result := inventory{}
 	selector := config.BundleLabel + "=" + bundle
@@ -147,6 +154,8 @@ func snapshot(ctx context.Context, client *cadenya.Client, bundle string) (inven
 	return result, nil
 }
 
+// retrieve checks that nothing outside the bundle already has key's external
+// ID. parent is the parent's canonical ID, for a child.
 func retrieve(ctx context.Context, c *cadenya.Client, key config.Key, parent string) error {
 	id := "external_id:" + key.ExternalID
 	var err error
@@ -173,9 +182,10 @@ func retrieve(ctx context.Context, c *cadenya.Client, key config.Key, parent str
 	if err != nil {
 		return fmt.Errorf("check ownership of %s: %w", key, err)
 	}
-	return fmt.Errorf("%s already exists outside the selected bundle; choose a different externalId or explicitly assign its bundle_key before importing it", key)
+	return fmt.Errorf("%s already exists outside this bundle; choose a different externalId, or label the existing resource with this bundle's bundle_key to hand it over", key)
 }
 
+// parentKey returns the key of k's parent.
 func parentKey(k config.Key) config.Key {
 	kind := config.ToolSet
 	switch k.Kind {
@@ -223,115 +233,95 @@ func deleteByKind(ctx context.Context, c *cadenya.Client, r *remote) error {
 func upsert(ctx context.Context, c *cadenya.Client, r *config.Resource, existing *remote, parent string) (string, string, error) {
 	create := &r.Metadata
 	update := &cadenya.UpdateResourceMetadata{Name: create.Name, ExternalID: create.ExternalID, Labels: create.Labels}
+	id := ""
+	if existing != nil {
+		id = existing.ID
+	}
 	var metadata *cadenya.ResourceMetadata
 	var host string
-	switch r.Kind {
-	case config.ToolSet:
-		var v *cadenya.ToolSet
-		var err error
-		if existing == nil {
-			v, err = c.ToolSets().Create(ctx, &cadenya.ToolSetCreateParams{Metadata: create, Spec: r.Spec.(*cadenya.ToolSetSpec)})
-		} else {
-			v, err = c.ToolSets().Update(ctx, existing.ID, &cadenya.ToolSetUpdateParams{Metadata: update, Spec: r.Spec.(*cadenya.ToolSetSpec), UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-		}
-	case config.Tool:
-		var v *cadenya.Tool
-		var err error
-		if existing == nil {
-			v, err = c.ToolSets().Tools().Create(ctx, parent, &cadenya.ToolCreateParams{Metadata: create, Spec: r.Spec.(*cadenya.ToolSpec)})
-		} else {
-			v, err = c.ToolSets().Tools().Update(ctx, parent, existing.ID, &cadenya.ToolUpdateParams{Metadata: update, Spec: r.Spec.(*cadenya.ToolSpec), UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-		}
-	case config.MemoryLayer:
-		var v *cadenya.MemoryLayer
-		var err error
-		if existing == nil {
-			v, err = c.MemoryLayers().Create(ctx, &cadenya.MemoryLayerCreateParams{Metadata: create, Spec: r.Spec.(*cadenya.MemoryLayerSpecParam)})
-		} else {
-			v, err = c.MemoryLayers().Update(ctx, existing.ID, &cadenya.MemoryLayerUpdateParams{Metadata: update, Spec: r.Spec.(*cadenya.MemoryLayerSpecParam), UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-		}
-	case config.MemoryEntry:
-		spec := r.Spec.(*config.MemoryEntrySpec)
-		var v *cadenya.MemoryEntryDetail
-		var err error
-		if existing == nil {
-			content := ""
-			if spec.Content != nil {
-				content = *spec.Content
-			}
-			v, err = c.MemoryLayers().Entries().Create(ctx, parent, &cadenya.MemoryEntryCreateParams{Metadata: create, Spec: &cadenya.MemoryEntryCreateSpec{Content: &cadenya.MemoryEntryCreateSpec_Content{Type: "content", Content: content, Key: spec.Key, Description: spec.Description}}})
-		} else {
-			v, err = c.MemoryLayers().Entries().Update(ctx, parent, existing.ID, &cadenya.MemoryEntryUpdateParams{Metadata: update, Spec: &cadenya.MemoryEntryUpdateSpec{Key: &spec.Key, Description: spec.Description, Content: spec.Content}, UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-		}
-	case config.Agent:
-		var v *cadenya.Agent
-		var err error
-		if existing == nil {
-			v, err = c.Agents().Create(ctx, &cadenya.AgentCreateParams{Metadata: create, Spec: r.Spec.(*cadenya.AgentSpec)})
-		} else {
-			v, err = c.Agents().Update(ctx, existing.ID, &cadenya.AgentUpdateParams{Metadata: update, Spec: r.Spec.(*cadenya.AgentSpec), UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-		}
-	case config.Variation:
-		var v *cadenya.AgentVariation
-		var err error
-		if existing == nil {
-			v, err = c.Agents().Variations().Create(ctx, parent, &cadenya.AgentVariationCreateParams{Metadata: create, Spec: r.Spec.(*cadenya.AgentVariationSpec)})
-		} else {
-			v, err = c.Agents().Variations().Update(ctx, parent, existing.ID, &cadenya.AgentVariationUpdateParams{Metadata: update, Spec: r.Spec.(*cadenya.AgentVariationSpec), UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-		}
-	case config.Widget:
-		var v *cadenya.Widget
-		var err error
-		if existing == nil {
-			v, err = c.Widgets().Create(ctx, &cadenya.WidgetCreateParams{Metadata: create, Spec: r.Spec.(*cadenya.WidgetSpec)})
-		} else {
-			v, err = c.Widgets().Update(ctx, existing.ID, &cadenya.WidgetUpdateParams{Metadata: update, Spec: r.Spec.(*cadenya.WidgetSpec), UpdateMask: &r.Mask})
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if v != nil {
-			metadata = v.Metadata
-			if v.Info != nil {
-				host = v.Info.Host
-			}
-		}
+	var err error
+	switch spec := r.Spec.(type) {
+	case *cadenya.ToolSetSpec:
+		metadata, err = save(existing == nil,
+			func() (*cadenya.ToolSet, error) {
+				return c.ToolSets().Create(ctx, &cadenya.ToolSetCreateParams{Metadata: create, Spec: spec})
+			},
+			func() (*cadenya.ToolSet, error) {
+				return c.ToolSets().Update(ctx, id, &cadenya.ToolSetUpdateParams{Metadata: update, Spec: spec, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.ToolSet) *cadenya.ResourceMetadata { return v.Metadata })
+	case *cadenya.ToolSpec:
+		metadata, err = save(existing == nil,
+			func() (*cadenya.Tool, error) {
+				return c.ToolSets().Tools().Create(ctx, parent, &cadenya.ToolCreateParams{Metadata: create, Spec: spec})
+			},
+			func() (*cadenya.Tool, error) {
+				return c.ToolSets().Tools().Update(ctx, parent, id, &cadenya.ToolUpdateParams{Metadata: update, Spec: spec, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.Tool) *cadenya.ResourceMetadata { return v.Metadata })
+	case *cadenya.MemoryLayerSpecParam:
+		metadata, err = save(existing == nil,
+			func() (*cadenya.MemoryLayer, error) {
+				return c.MemoryLayers().Create(ctx, &cadenya.MemoryLayerCreateParams{Metadata: create, Spec: spec})
+			},
+			func() (*cadenya.MemoryLayer, error) {
+				return c.MemoryLayers().Update(ctx, id, &cadenya.MemoryLayerUpdateParams{Metadata: update, Spec: spec, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.MemoryLayer) *cadenya.ResourceMetadata { return v.Metadata })
+	case *config.MemoryEntrySpec:
+		// The API takes an entry's content as a union on create, and as a plain
+		// field on update.
+		metadata, err = save(existing == nil,
+			func() (*cadenya.MemoryEntryDetail, error) {
+				content := ""
+				if spec.Content != nil {
+					content = *spec.Content
+				}
+				body := &cadenya.MemoryEntryCreateSpec_Content{Type: "content", Content: content, Key: spec.Key, Description: spec.Description}
+				return c.MemoryLayers().Entries().Create(ctx, parent, &cadenya.MemoryEntryCreateParams{Metadata: create, Spec: &cadenya.MemoryEntryCreateSpec{Content: body}})
+			},
+			func() (*cadenya.MemoryEntryDetail, error) {
+				body := &cadenya.MemoryEntryUpdateSpec{Key: &spec.Key, Description: spec.Description, Content: spec.Content}
+				return c.MemoryLayers().Entries().Update(ctx, parent, id, &cadenya.MemoryEntryUpdateParams{Metadata: update, Spec: body, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.MemoryEntryDetail) *cadenya.ResourceMetadata { return v.Metadata })
+	case *cadenya.AgentSpec:
+		metadata, err = save(existing == nil,
+			func() (*cadenya.Agent, error) {
+				return c.Agents().Create(ctx, &cadenya.AgentCreateParams{Metadata: create, Spec: spec})
+			},
+			func() (*cadenya.Agent, error) {
+				return c.Agents().Update(ctx, id, &cadenya.AgentUpdateParams{Metadata: update, Spec: spec, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.Agent) *cadenya.ResourceMetadata { return v.Metadata })
+	case *cadenya.AgentVariationSpec:
+		metadata, err = save(existing == nil,
+			func() (*cadenya.AgentVariation, error) {
+				return c.Agents().Variations().Create(ctx, parent, &cadenya.AgentVariationCreateParams{Metadata: create, Spec: spec})
+			},
+			func() (*cadenya.AgentVariation, error) {
+				return c.Agents().Variations().Update(ctx, parent, id, &cadenya.AgentVariationUpdateParams{Metadata: update, Spec: spec, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.AgentVariation) *cadenya.ResourceMetadata { return v.Metadata })
+	case *cadenya.WidgetSpec:
+		metadata, err = save(existing == nil,
+			func() (*cadenya.Widget, error) {
+				return c.Widgets().Create(ctx, &cadenya.WidgetCreateParams{Metadata: create, Spec: spec})
+			},
+			func() (*cadenya.Widget, error) {
+				return c.Widgets().Update(ctx, id, &cadenya.WidgetUpdateParams{Metadata: update, Spec: spec, UpdateMask: &r.Mask})
+			},
+			func(v *cadenya.Widget) *cadenya.ResourceMetadata {
+				if v.Info != nil {
+					host = v.Info.Host
+				}
+				return v.Metadata
+			})
+	default:
+		return "", "", fmt.Errorf("unknown spec type %T for %s", r.Spec, r.Key)
+	}
+	if err != nil {
+		return "", "", err
 	}
 	if metadata == nil || metadata.ID == "" {
 		return "", "", fmt.Errorf("API response is missing metadata.id")
@@ -339,15 +329,28 @@ func upsert(ctx context.Context, c *cadenya.Client, r *config.Resource, existing
 	return metadata.ID, host, nil
 }
 
+// save calls create or update and returns the response's metadata.
+func save[T any](creating bool, create, update func() (*T, error), metadata func(*T) *cadenya.ResourceMetadata) (*cadenya.ResourceMetadata, error) {
+	call := update
+	if creating {
+		call = create
+	}
+	v, err := call()
+	if err != nil || v == nil {
+		return nil, err
+	}
+	return metadata(v), nil
+}
+
 // transition moves an agent between lifecycle states.
 func transition(ctx context.Context, c *cadenya.Client, action, id string) error {
 	var err error
 	switch action {
-	case "publish":
+	case ActionPublish:
 		_, err = c.Agents().Publish(ctx, id, nil)
-	case "unpublish":
+	case ActionUnpublish:
 		_, err = c.Agents().Unpublish(ctx, id, nil)
-	case "unarchive":
+	case ActionUnarchive:
 		_, err = c.Agents().Unarchive(ctx, id, nil)
 	default:
 		err = fmt.Errorf("unknown agent transition %s", action)
@@ -355,7 +358,9 @@ func transition(ctx context.Context, c *cadenya.Client, action, id string) error
 	return err
 }
 
-// Parent deletes can cascade. Refuse to delete another bundle's/manual children.
+// checkChildren refuses to delete a parent whose children the bundle doesn't
+// own, because the delete would take them with it. It also refuses to delete an
+// agent that a widget outside the bundle is bound to.
 func checkChildren(ctx context.Context, c *cadenya.Client, r *remote, bundle string) error {
 	check := func(m *cadenya.ResourceMetadata) error {
 		if m == nil || m.Labels[config.BundleLabel] != bundle {

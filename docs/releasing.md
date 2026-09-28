@@ -37,10 +37,6 @@ Before a release, verify:
    generates GitHub provenance attestations, and publishes the GitHub release.
 4. Inspect the published assets and verify a downloaded archive and attestation.
 
-Publishing requires the repository's Actions permissions for contents,
-attestations, and OIDC. Enable GitHub private vulnerability reporting before
-announcing the package. Pin consuming actions to a reviewed commit SHA or release
-tag; this workflow does not move floating major tags automatically.
-
-The working tree alone does not create a hosted release. Repository creation,
-pushing code/tags, and release publication are separate maintainer actions.
+The release job needs the Actions permissions it declares: contents, attestations,
+and OIDC. The workflow doesn't move floating major tags such as `v0`, so consumers
+pin a release tag or a commit SHA.

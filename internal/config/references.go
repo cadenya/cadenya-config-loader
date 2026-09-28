@@ -13,24 +13,41 @@ type AssignmentTarget struct {
 	ID   *string
 }
 
-// AssignmentTargets exposes SDK union targets without losing their variant.
+// AssignmentTargets returns pointers to the IDs a variation's assignments and
+// memory layer assignments target, so callers can check or rewrite them in
+// place. Agent pool assignments aren't included: bundles don't manage pools.
 func AssignmentTargets(spec *cadenya.AgentVariationSpec) []AssignmentTarget {
 	var result []AssignmentTarget
 	for i := range spec.Assignments {
-		a := &spec.Assignments[i]
-		switch {
-		case a.ToolSetID != nil:
-			result = append(result, AssignmentTarget{ToolSet, &a.ToolSetID.ToolSetID})
-		case a.ToolID != nil:
-			result = append(result, AssignmentTarget{Tool, &a.ToolID.ToolID})
-		case a.SubAgentID != nil:
-			result = append(result, AssignmentTarget{Agent, &a.SubAgentID.SubAgentID})
+		if target, ok := assignmentTarget(&spec.Assignments[i]); ok {
+			result = append(result, target)
 		}
 	}
 	for i := range spec.MemoryLayerAssignments {
 		result = append(result, AssignmentTarget{MemoryLayer, &spec.MemoryLayerAssignments[i].MemoryLayerID})
 	}
 	return result
+}
+
+func assignmentTarget(a *cadenya.VariationAssignment) (AssignmentTarget, bool) {
+	switch {
+	case a.ToolSetID != nil:
+		return AssignmentTarget{ToolSet, &a.ToolSetID.ToolSetID}, true
+	case a.ToolID != nil:
+		return AssignmentTarget{Tool, &a.ToolID.ToolID}, true
+	case a.SubAgentID != nil:
+		return AssignmentTarget{Agent, &a.SubAgentID.SubAgentID}, true
+	}
+	return AssignmentTarget{}, false
+}
+
+// AssignmentID returns the ID a single assignment targets.
+func AssignmentID(a cadenya.VariationAssignment) (string, bool) {
+	target, ok := assignmentTarget(&a)
+	if !ok {
+		return "", false
+	}
+	return *target.ID, true
 }
 
 // WidgetTargets exposes a widget's agent and pinned variation references.
@@ -42,6 +59,8 @@ func WidgetTargets(spec *cadenya.WidgetSpec) []AssignmentTarget {
 	return result
 }
 
+// ReferenceKey parses an external_id: reference to a resource of kind. It
+// reports false for a canonical ID, which needs no resolving.
 func ReferenceKey(kind Kind, value string) (Key, bool, error) {
 	if !strings.HasPrefix(value, "external_id:") {
 		return Key{}, false, nil
@@ -61,6 +80,8 @@ func ReferenceKey(kind Kind, value string) (Key, bool, error) {
 	return key, true, nil
 }
 
+// ValidateReferences checks that every external_id: reference in the bundle
+// points at a resource in the bundle.
 func (b *Bundle) ValidateReferences() error {
 	for _, r := range b.Sorted(Variation) {
 		for _, ref := range AssignmentTargets(r.Spec.(*cadenya.AgentVariationSpec)) {

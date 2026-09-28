@@ -28,7 +28,7 @@ type Report struct {
 func run(ctx context.Context, cmd *cli.Command) error {
 	format := cmd.String("output")
 	if format != "text" && format != "json" {
-		return usagef("--output must be text or json")
+		return Usagef("--output must be text or json")
 	}
 	result := &Report{SchemaVersion: 1, Command: cmd.Name}
 	file, err := prepareReport(cmd.String("report-file"))

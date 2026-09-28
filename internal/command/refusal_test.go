@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// Regression tests for release-review findings. Each scenario used to pass plan
-// and then fail partway through apply.
+// Plan refuses these scenarios up front. Each would otherwise fail partway
+// through apply, or break a resource the bundle doesn't own.
 
 func TestOutsideVariationBlocksDeletingWhatItAssigns(t *testing.T) {
 	f := newFixture(t)

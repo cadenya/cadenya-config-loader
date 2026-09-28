@@ -30,7 +30,7 @@ func New(version string, out, errOut io.Writer) *cli.Command {
 			&cli.StringFlag{Name: "output", Value: "text", Usage: "Output format: text or json"},
 			&cli.DurationFlag{Name: "timeout", Value: 60 * time.Second, Usage: "Timeout for each HTTP request"},
 			&cli.DurationFlag{Name: "operation-timeout", Value: 10 * time.Minute, Usage: "Deadline for the complete plan or apply"},
-			&cli.IntFlag{Name: "retries", Value: 2, Usage: "Retries for idempotent API requests (0–10); creates and updates are not retried"},
+			&cli.IntFlag{Name: "retries", Value: 2, Usage: "Retries for idempotent API requests (0 to 10); creates and updates are not retried"},
 			&cli.StringFlag{Name: "report-file", Usage: "Write a JSON result atomically to this path, including failures"},
 			&cli.StringFlag{Name: "log-level", Value: "info", Sources: cli.EnvVars("CADENYA_LOG_LEVEL"), Usage: "Log level on stderr: debug, info, warn, or error"},
 			&cli.StringFlag{Name: "log-format", Value: "text", Sources: cli.EnvVars("CADENYA_LOG_FORMAT"), Usage: "Log format on stderr: text or json"},
@@ -41,7 +41,7 @@ func New(version string, out, errOut io.Writer) *cli.Command {
 		OnUsageError:   usageErrorHandler,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if cmd.Args().Present() {
-				return usagef("unknown command %q (expected validate, plan, or apply)", cmd.Args().First())
+				return Usagef("unknown command %q (expected validate, plan, or apply)", cmd.Args().First())
 			}
 			return cli.ShowRootCommandHelp(cmd)
 		},
@@ -61,38 +61,25 @@ func usageErrorHandler(_ context.Context, _ *cli.Command, err error, _ bool) err
 	return usageError{err}
 }
 
-func execute(ctx context.Context, cmd *cli.Command, result *Report) error {
-	log, err := newLogger(cmd.String("log-level"), cmd.String("log-format"), cmd.String("api-key"), cmd.Root().ErrWriter)
-	if err != nil {
-		return err
-	}
-	log = log.With("command", cmd.Name)
-	if cmd.Args().Len() != 0 {
-		return usagef("unexpected positional arguments: %s", cmd.Args().First())
-	}
-	if cmd.Duration("timeout") <= 0 || cmd.Duration("operation-timeout") <= 0 {
-		return usagef("--timeout and --operation-timeout must be positive")
-	}
-	if cmd.Int("retries") < 0 || cmd.Int("retries") > 10 {
-		return usagef("--retries must be between 0 and 10")
-	}
-	ctx, cancel := context.WithTimeout(ctx, cmd.Duration("operation-timeout"))
-	defer cancel()
+// settings resolves cadenya.yaml, then environment variables and flags on top
+// of it, then defaults. Paths come back absolute.
+func settings(cmd *cli.Command) (config.Settings, error) {
 	root, err := filepath.Abs(cmd.String("directory"))
 	if err != nil {
-		return err
+		return config.Settings{}, err
 	}
-	settingsPath := cmd.String("config")
-	if settingsPath == "" {
-		settingsPath = "cadenya.yaml"
+	path := cmd.String("config")
+	if path == "" {
+		path = "cadenya.yaml"
 	}
-	if !filepath.IsAbs(settingsPath) {
-		settingsPath = filepath.Join(root, settingsPath)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
 	}
-	s, err := config.ReadSettings(settingsPath, !cmd.IsSet("config"))
+	s, err := config.ReadSettings(path, !cmd.IsSet("config"))
 	if err != nil {
-		return usageError{err}
+		return s, usageError{err}
 	}
+	// A flag's value comes from the flag or its environment variable.
 	for _, field := range []struct {
 		flag   string
 		target *string
@@ -111,7 +98,32 @@ func execute(ctx context.Context, cmd *cli.Command, result *Report) error {
 		s.ResourceDir = filepath.Join(root, s.ResourceDir)
 	}
 	if err := config.ValidateBundleKey(s.BundleKey); err != nil {
-		return usagef("set bundleKey in cadenya.yaml or --bundle-key: %w", err)
+		return s, Usagef("set bundleKey in cadenya.yaml or --bundle-key: %w", err)
+	}
+	return s, nil
+}
+
+// execute runs validate, plan, or apply, and fills in result as it goes.
+func execute(ctx context.Context, cmd *cli.Command, result *Report) error {
+	log, err := newLogger(cmd.String("log-level"), cmd.String("log-format"), cmd.String("api-key"), cmd.Root().ErrWriter)
+	if err != nil {
+		return err
+	}
+	log = log.With("command", cmd.Name)
+	if cmd.Args().Len() != 0 {
+		return Usagef("unexpected positional arguments: %s", cmd.Args().First())
+	}
+	if cmd.Duration("timeout") <= 0 || cmd.Duration("operation-timeout") <= 0 {
+		return Usagef("--timeout and --operation-timeout must be positive")
+	}
+	if cmd.Int("retries") < 0 || cmd.Int("retries") > 10 {
+		return Usagef("--retries must be between 0 and 10")
+	}
+	ctx, cancel := context.WithTimeout(ctx, cmd.Duration("operation-timeout"))
+	defer cancel()
+	s, err := settings(cmd)
+	if err != nil {
+		return err
 	}
 	b, err := config.Load(s.ResourceDir, s.BundleKey)
 	if err != nil {
@@ -125,13 +137,13 @@ func execute(ctx context.Context, cmd *cli.Command, result *Report) error {
 		return nil
 	}
 	if strings.TrimSpace(s.WorkspaceID) == "" {
-		return usagef("set workspaceId in cadenya.yaml, --workspace-id, or CADENYA_WORKSPACE_ID")
+		return Usagef("set workspaceId in cadenya.yaml, --workspace-id, or CADENYA_WORKSPACE_ID")
 	}
 	if strings.TrimSpace(cmd.String("api-key")) == "" {
-		return usagef("set CADENYA_API_KEY or --api-key for plan/apply")
+		return Usagef("set CADENYA_API_KEY or --api-key for plan/apply")
 	}
 	if len(b.Resources) == 0 && cmd.Name == "apply" && !cmd.Bool("dry-run") && !cmd.Bool("allow-empty") {
-		return usagef("bundle is empty; use --allow-empty to delete all resources with bundle_key=%s", s.BundleKey)
+		return Usagef("bundle is empty; use --allow-empty to delete all resources with bundle_key=%s", s.BundleKey)
 	}
 	client, err := cadenya.NewClient(cadenya.WithAPIKey(cmd.String("api-key")), cadenya.WithBaseURL(s.BaseURL), cadenya.WithWorkspaceID(s.WorkspaceID), cadenya.WithHTTPClient(&http.Client{Timeout: cmd.Duration("timeout")}), cadenya.WithMaxRetries(int(cmd.Int("retries"))))
 	if err != nil {
