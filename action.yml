@@ -47,8 +47,8 @@ inputs:
     description: 'Log format on stderr: text or json'
     default: text
   version:
-    description: 'Cadenya CLI release containing cadenya config; required unless binary-path is set'
-    required: false
+    description: 'Cadenya CLI release containing cadenya config'
+    default: '1.10.0'
   binary-path:
     description: 'Path to a cadenya CLI binary to run instead of downloading a release'
     required: false
