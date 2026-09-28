@@ -1,16 +1,16 @@
 # Copy to .buildkite/pipeline.yml in a consuming repository.
-# Provision a pinned cadenya-config binary on your agent; see docs/ci.md.
+# Provision a pinned cadenya CLI binary on your agent; see docs/ci.md.
 steps:
   - label: ':white_check_mark: Validate Cadenya'
     key: cadenya-validate
-    command: cadenya-config validate --report-file cadenya-validation.json
+    command: cadenya config validate --report-file cadenya-validation.json
     artifact_paths: cadenya-validation.json
     timeout_in_minutes: 5
 
   - label: ':rocket: Apply Cadenya'
     depends_on: cadenya-validate
     if: build.branch == "main" && build.pull_request.id == null
-    command: cadenya-config apply --operation-timeout 10m --report-file cadenya-result.json
+    command: cadenya config apply --operation-timeout 10m --report-file cadenya-result.json
     env:
       CADENYA_WORKSPACE_ID: development
       CADENYA_BUNDLE_KEY: support-tools

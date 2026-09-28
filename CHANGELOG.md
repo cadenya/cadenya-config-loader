@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.0 (2026-09-27)
+
+- The repository is now a GitHub Action wrapper around the unified `cadenya` CLI.
+- The Action downloads and verifies a pinned `cadenya/cadenya-cli` release and
+  runs `cadenya config github-action`.
+- The standalone `cadenya-config` source and binary release pipeline moved to
+  `cadenya/cadenya-cli`. Existing Action tags retain their previous behavior.
+
 ## v0.1.2 (2026-09-27)
 
 - The GitHub Action downloads the `cadenya-config` release for the runner and
