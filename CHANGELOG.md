@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1 (2026-09-27)
+
+- `cadenya-config --version` reports the release when installed with
+  `go install ...@vX.Y.Z`, instead of `dev`.
+- The README installs from the published release.
+
 ## v0.1.0 (2026-09-27)
 
 The first release. `cadenya-config` validates, plans, and applies a Cadenya

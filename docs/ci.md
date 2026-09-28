@@ -35,8 +35,8 @@ Alternatively, with Go installed:
 go install "github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@${VERSION:?set VERSION}"
 ```
 
-Before the first release, build a reviewed checkout using `make build` and install
-`bin/cadenya-config` on the agent. Do not use an unpinned `@latest` for deployment jobs.
+Either way, `cadenya-config --version` reports the release. Do not use an unpinned
+`@latest` for deployment jobs.
 
 ## Common command contract
 
