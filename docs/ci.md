@@ -31,7 +31,7 @@ gh attestation verify cadenya-config_VERSION_linux_amd64.tar.gz \
 Alternatively, with Go installed:
 
 ```sh
-# Set VERSION to a published version such as v0.1.1, or a reviewed commit hash.
+# Set VERSION to a published version such as v0.1.2, or a reviewed commit hash.
 go install "github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@${VERSION:?set VERSION}"
 ```
 
@@ -100,7 +100,10 @@ the common command contract above.
 
 See [action.yml](../action.yml) for inputs and outputs and
 [the workflow example](../examples/github-workflow.yaml) for a consuming workflow.
-The composite action builds its native adapter from the pinned action revision.
+The composite action downloads the release it belongs to (the `version` input's
+default), verifies the archive against `checksums.txt`, and runs it. It never
+installs Go or compiles. Runners without access to github.com can pass
+`binary-path` instead.
 It exports `result`, `report-path`, and planned counts, including on partial
 failures. To inspect outputs after an action failure, use a subsequent step with
 `if: always()`; preserving the action's failing status keeps the job red.

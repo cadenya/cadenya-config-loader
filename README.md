@@ -9,13 +9,13 @@ It's a Go CLI built on [urfave/cli v3](https://cli.urfave.org/v3/getting-started
 Download the archive for your platform from [the latest release](https://github.com/cadenya/cadenya-config-loader/releases/latest). Each one holds the binary, the docs, and the example bundle. Check it against `checksums.txt`, and against its build provenance:
 
 ```sh
-gh release download v0.1.1 -R cadenya/cadenya-config-loader -p 'cadenya-config_0.1.1_linux_amd64.tar.gz' -p checksums.txt
+gh release download v0.1.2 -R cadenya/cadenya-config-loader -p 'cadenya-config_0.1.2_linux_amd64.tar.gz' -p checksums.txt
 sha256sum --check --ignore-missing checksums.txt
-gh attestation verify cadenya-config_0.1.1_linux_amd64.tar.gz --repo cadenya/cadenya-config-loader
-tar -xzf cadenya-config_0.1.1_linux_amd64.tar.gz
+gh attestation verify cadenya-config_0.1.2_linux_amd64.tar.gz --repo cadenya/cadenya-config-loader
+tar -xzf cadenya-config_0.1.2_linux_amd64.tar.gz
 ```
 
-(With Go 1.22 or newer, `go install github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@v0.1.1` works too.) [docs/ci.md](docs/ci.md) covers macOS and Windows.
+(With Go 1.22 or newer, `go install github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@v0.1.2` works too.) [docs/ci.md](docs/ci.md) covers macOS and Windows.
 
 Validate the example bundle first. Validation never touches the API:
 
@@ -451,7 +451,7 @@ Reads and deletes retry up to `--retries` times. Creates and updates never retry
 
 ### GitHub Actions
 
-This repository is also a composite action. It builds the CLI from the action revision you pin, so it works before any binary release exists:
+This repository is also a composite action. It downloads the `cadenya-config` release for the runner, checks it against the release's `checksums.txt`, and runs it. There's no Go to install and nothing to compile, so a run costs a few seconds:
 
 ```yaml
 name: Configure Cadenya
@@ -477,11 +477,13 @@ jobs:
           bundle-key: support-tools
 ```
 
-`command` defaults to `plan`. Run `command: validate` on pull requests: it needs no API key. The other inputs map to the CLI flags: `directory`, `config`, `resource-dir`, `base-url`, `allow-empty`, `timeout`, `operation-timeout`, `retries`, `log-level`, and `log-format`. `go-version` picks the Go that builds the CLI.
+`command` defaults to `plan`. Run `command: validate` on pull requests: it needs no API key. The other inputs map to the CLI flags: `directory`, `config`, `resource-dir`, `base-url`, `allow-empty`, `timeout`, `operation-timeout`, `retries`, `log-level`, and `log-format`.
+
+**The action runs the release it belongs to.** Pin `@v0.1.2` and it downloads cadenya-config 0.1.2. The `version` input overrides that, but the inputs and outputs are only tested against the matching release, so leave it alone unless you mean it. `binary-path` skips the download and runs a binary you provide.
 
 The outputs are `result` (the JSON report), `report-path`, and the planned counts: `creates`, `updates`, `deletes`, `detaches`, and `state-changes`. The same counts land in the job summary. They count the plan, not what finished, so check each operation's `completed` flag after a failed apply.
 
-GitHub-hosted Ubuntu, macOS, and Windows runners work. Self-hosted runners need Bash and support for `actions/setup-go@v7`. See [action.yml](action.yml) and [the workflow example](examples/github-workflow.yaml) for everything else.
+GitHub-hosted Ubuntu, macOS, and Windows runners work, on x64 or ARM64. Self-hosted runners need Bash, `curl`, and access to github.com, or `binary-path` if they can't reach it. See [action.yml](action.yml) and [the workflow example](examples/github-workflow.yaml) for everything else.
 
 ### Everywhere else
 
@@ -513,7 +515,7 @@ The code:
 2. `internal/command`: flags, the three commands, reports, and the tests.
 3. `internal/config`: the YAML loader, identities, and local references. It never calls the API.
 4. `internal/reconcile`: listing, ownership checks, planning, and apply.
-5. `internal/action` and `cmd/cadenya-config-action`: the GitHub Action adapter.
+5. `internal/action`: the GitHub Action adapter, which runs as the hidden `cadenya-config github-action` command.
 
 [docs/releasing.md](docs/releasing.md) covers cutting a release.
 

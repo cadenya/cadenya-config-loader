@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.2 (2026-09-27)
+
+- The GitHub Action downloads the `cadenya-config` release for the runner and
+  checks it against `checksums.txt`, instead of installing Go and compiling on
+  every run. The `go-version` input is gone. The new `version` input picks a
+  different release, and `binary-path` runs a binary you provide.
+- The action's adapter is now the hidden `cadenya-config github-action` command,
+  so release archives hold a single binary.
+- Error messages name resources instead of canonical IDs.
+
 ## v0.1.1 (2026-09-27)
 
 - `cadenya-config --version` reports the release when installed with

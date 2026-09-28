@@ -11,7 +11,7 @@ import (
 )
 
 func TestActionWrapper(t *testing.T) {
-	binary := buildCLI(t, "cadenya-config-action")
+	binary := buildCLI(t, "cadenya-config")
 	for _, scenario := range []string{"plan", "apply", "validate", "failed apply", "invalid command", "invalid YAML", "environment fallback"} {
 		t.Run(scenario, func(t *testing.T) {
 			f := newFixture(t)
@@ -58,7 +58,7 @@ func TestActionWrapper(t *testing.T) {
 				t.Setenv("CADENYA_BASE_URL", f.server.URL)
 			}
 			t.Setenv("INPUT_COMMAND", mode)
-			cmd := exec.Command(binary)
+			cmd := exec.Command(binary, "github-action")
 			cmd.Dir = root
 			logs, err := cmd.CombinedOutput()
 			shouldFail := scenario == "failed apply" || scenario == "invalid command" || scenario == "invalid YAML"

@@ -46,9 +46,12 @@ inputs:
   log-format:
     description: 'Log format on stderr: text or json'
     default: text
-  go-version:
-    description: Go version used to build the CLI from this action revision
-    default: stable
+  version:
+    description: 'cadenya-config release to download. Defaults to the release this action revision belongs to; change it only to run a different release on purpose'
+    default: '0.1.2'
+  binary-path:
+    description: 'Path to a cadenya-config binary to run instead of downloading a release, for runners without internet access or for testing a build'
+    required: false
 outputs:
   result:
     description: JSON result, including operations and completion status
@@ -74,29 +77,70 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-      with:
-        go-version: ${{ inputs.go-version }}
-        cache: true
-        cache-dependency-path: ${{ github.action_path }}/go.sum
-    - name: Build Cadenya CLI
-      id: build
+    - name: Install cadenya-config
+      id: install
       shell: bash
       env:
-        CADENYA_ACTION_PATH: ${{ github.action_path }}
-        GOWORK: 'off'
+        CADENYA_VERSION: ${{ inputs.version }}
+        CADENYA_BINARY: ${{ inputs.binary-path }}
       run: |
         set -euo pipefail
-        build_dir="$(mktemp -d "$RUNNER_TEMP/cadenya-build.XXXXXX")"
-        cd "$CADENYA_ACTION_PATH"
-        go build -mod=readonly -buildvcs=false -trimpath -o "$build_dir/" ./cmd/cadenya-config-action
-        printf 'binary=%s\n' "$build_dir/cadenya-config-action$(go env GOEXE)" >> "$GITHUB_OUTPUT"
-    - name: Run Cadenya CLI
+        fail() { echo "::error::$*" >&2; exit 1; }
+        if [[ -n "$CADENYA_BINARY" ]]; then
+          [[ -f "$CADENYA_BINARY" ]] || fail "binary-path $CADENYA_BINARY does not exist"
+          printf 'binary=%s\n' "$CADENYA_BINARY" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        version="${CADENYA_VERSION#v}"
+        [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || fail "version must look like 1.2.3, got '$CADENYA_VERSION'"
+        exe=""
+        case "$RUNNER_OS" in
+          Linux) os=linux ext=tar.gz ;;
+          macOS) os=darwin ext=tar.gz ;;
+          Windows) os=windows ext=zip exe=.exe ;;
+          *) fail "unsupported runner OS $RUNNER_OS" ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) fail "unsupported runner architecture $RUNNER_ARCH" ;;
+        esac
+        dir="$RUNNER_TEMP/cadenya-config-$version-$os-$arch"
+        binary="$dir/cadenya-config$exe"
+        # A second use of the action in the same job reuses the download.
+        if [[ ! -f "$binary" ]]; then
+          archive="cadenya-config_${version}_${os}_${arch}.${ext}"
+          base="https://github.com/cadenya/cadenya-config-loader/releases/download/v$version"
+          mkdir -p "$dir"
+          cd "$dir"
+          curl -fsSL --retry 3 --retry-connrefused -o "$archive" "$base/$archive" || fail "could not download $base/$archive"
+          curl -fsSL --retry 3 --retry-connrefused -o checksums.txt "$base/checksums.txt" || fail "could not download $base/checksums.txt"
+          expected="$(awk -v f="$archive" '$2 == f {print $1}' checksums.txt)"
+          [[ -n "$expected" ]] || fail "checksums.txt has no entry for $archive"
+          if command -v sha256sum >/dev/null; then
+            actual="$(sha256sum "$archive" | awk '{print $1}')"
+          else
+            actual="$(shasum -a 256 "$archive" | awk '{print $1}')"
+          fi
+          [[ "$actual" == "$expected" ]] || fail "checksum mismatch for $archive"
+          if [[ "$ext" == zip ]]; then
+            if command -v unzip >/dev/null; then
+              unzip -q -o "$archive" "cadenya-config$exe"
+            else
+              powershell -NoProfile -Command "Expand-Archive -Force -LiteralPath '$archive' -DestinationPath ."
+            fi
+          else
+            tar -xzf "$archive" cadenya-config
+          fi
+          rm -f "$archive" checksums.txt
+        fi
+        "$binary" --version
+        printf 'binary=%s\n' "$binary" >> "$GITHUB_OUTPUT"
+    - name: Run cadenya-config
       id: run
       shell: bash
       env:
-        CADENYA_ACTION_PATH: ${{ github.action_path }}
-        CADENYA_ACTION_BINARY: ${{ steps.build.outputs.binary }}
+        CADENYA_BINARY: ${{ steps.install.outputs.binary }}
         INPUT_COMMAND: ${{ inputs.command }}
         INPUT_API_KEY: ${{ inputs.api-key }}
         INPUT_WORKSPACE_ID: ${{ inputs.workspace-id }}
@@ -111,4 +155,4 @@ runs:
         INPUT_RETRIES: ${{ inputs.retries }}
         INPUT_LOG_LEVEL: ${{ inputs.log-level }}
         INPUT_LOG_FORMAT: ${{ inputs.log-format }}
-      run: '"$CADENYA_ACTION_BINARY"'
+      run: '"$CADENYA_BINARY" github-action'

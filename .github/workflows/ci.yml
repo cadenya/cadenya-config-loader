@@ -33,13 +33,18 @@ jobs:
           fi
       - run: go vet ./...
       - run: go test -race ./...
-      - run: go build ./cmd/...
+      - name: Build
+        shell: bash
+        run: go build -o "$RUNNER_TEMP/bin/" ./cmd/cadenya-config
       - run: go run ./cmd/cadenya-config --directory examples/basic validate
+      # The action normally downloads its release. Here it runs the binary this
+      # commit just built, so action.yml changes are tested before a release.
       - name: Exercise the composite action
         uses: ./
         with:
           command: validate
           directory: examples/basic
+          binary-path: ${{ runner.temp }}/bin/cadenya-config${{ runner.os == 'Windows' && '.exe' || '' }}
   minimum-go:
     runs-on: ubuntu-latest
     steps:

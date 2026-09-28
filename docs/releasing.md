@@ -1,8 +1,8 @@
 # Releases
 
 Release tooling uses GoReleaser 2.18.2. It builds static CLI binaries for Linux,
-macOS, and Windows, each on amd64 and arm64. The action builds its own adapter
-from source, so action and CLI versions can share a tag.
+macOS, and Windows, each on amd64 and arm64. The GitHub Action downloads those
+binaries, so every tag is both a CLI release and an action release.
 
 ## Verify locally
 
@@ -31,11 +31,17 @@ Before a release, verify:
 1. Choose a semantic version. Before 1.0, document breaking changes in the minor
    release notes. After 1.0, breaking CLI or report changes require a major release.
 2. Add a `## vX.Y.Z (YYYY-MM-DD)` section to `CHANGELOG.md`. The release workflow
-   publishes that section as the release notes, and fails if it's missing. Commit
-   it with the reviewed changes, then push a `vX.Y.Z` tag pointing at that commit. A prerelease tag such as `v0.1.1-rc.1` creates a prerelease.
-3. The release workflow reruns verification, builds archives, creates checksums,
-   generates GitHub provenance attestations, and publishes the GitHub release.
-4. Inspect the published assets and verify a downloaded archive and attestation.
+   publishes that section as the release notes, and fails if it's missing.
+3. Set the `version` input's default in `action.yml` to `X.Y.Z`. That's the release
+   the action downloads, so the release workflow refuses a tag that doesn't match,
+   and a test fails until it matches the newest CHANGELOG release.
+4. Commit both with the reviewed changes, then push a `vX.Y.Z` tag pointing at that
+   commit. A prerelease tag such as `v1.2.0-rc.1` creates a prerelease.
+5. The release workflow reruns verification, builds archives, creates checksums,
+   generates GitHub provenance attestations, and publishes the GitHub release. Then
+   it runs the action on Linux, macOS, and Windows, downloading the new release the
+   way consumers do.
+6. Inspect the published assets and verify a downloaded archive and attestation.
 
 The release job needs the Actions permissions it declares: contents, attestations,
 and OIDC. The workflow doesn't move floating major tags such as `v0`, so consumers

@@ -10,8 +10,24 @@ concurrency:
 jobs:
   verify:
     uses: ./.github/workflows/ci.yml
+  # The action downloads the release named by its version input's default. A tag
+  # whose action.yml names a different release would ship an action that runs
+  # the wrong binary.
+  action-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check action.yml names this release
+        run: |
+          set -euo pipefail
+          want="${GITHUB_REF_NAME#v}"
+          have="$(awk '/^  version:/ {found=1} found && /default:/ {gsub(/[^0-9A-Za-z.-]/, "", $2); print $2; exit}' action.yml)"
+          if [[ "$have" != "$want" ]]; then
+            echo "::error::action.yml's version input defaults to '$have', but this tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
   release:
-    needs: verify
+    needs: [verify, action-version]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,3 +66,27 @@ jobs:
           args=(--repo "$GITHUB_REPOSITORY" --verify-tag --notes-file "$RUNNER_TEMP/notes.md" --title "$GITHUB_REF_NAME")
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then args+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.zip dist/checksums.txt "${args[@]}"
+  # Run the action the way consumers do: downloading the release just published.
+  smoke:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run the released action
+        id: action
+        uses: ./
+        with:
+          command: validate
+          directory: examples/basic
+      - name: Check its outputs
+        shell: bash
+        env:
+          RESULT: ${{ steps.action.outputs.result }}
+        run: |
+          set -euo pipefail
+          echo "$RESULT"
+          [[ "$RESULT" == *'"valid":true'* ]]
