@@ -54,7 +54,7 @@ bin/cadenya-config -C examples/basic apply --workspace-id development
 
 Apply prints the same list and ends with `Applied: 9 create, 0 update, 0 delete, 0 detach, 1 state change`. The widget line carries the host to embed, like `create    widget support-chat (h2w5nrzmpn4f.widgets.cadenya.com)`. Meanwhile stderr gets a [log line](#logs-and-exit-codes) for each write as it lands.
 
-The API key needs `agents:read`, `agents:manage`, `tools:read`, `tools:manage`, `memory:read`, and `memory:manage`. Plan needs only the three read scopes.
+The API key needs `agents:manage`, `tools:manage`, `memory:manage`, and `widgets:manage`, plus the matching `:read` scopes. Plan needs only the four read scopes. A missing scope fails with `SCOPE_MISSING` and names both the scope Cadenya wanted (`required_scope=widgets:manage`) and the ones the key has.
 
 ## How ownership works
 
@@ -66,7 +66,7 @@ The label also keeps the CLI away from everything else in the workspace:
 
 1. It never adopts a resource without your label. If an external ID you're about to create already exists outside the bundle, plan fails and names it.
 2. It never deletes a parent with children outside the bundle. An agent with a hand-made variation stays put, and so does a Bare or HTTP tool set holding someone else's tool, or a memory layer holding someone else's entry.
-3. It never deletes an agent that a widget outside the bundle is bound to. (Cadenya wouldn't let it anyway.)
+3. It never deletes something a resource outside the bundle depends on: a tool, tool set, memory layer, or sub-agent that another variation assigns, a variation another widget pins, or an agent another widget is bound to. Plan names the resource that's in the way. (Checking this lists every agent, variation, and widget in the workspace, so it only happens when the plan deletes something.)
 4. It refuses to apply an empty `.cadenya/` unless you pass `--allow-empty`. An empty tree means "delete the whole bundle." That deserves a flag.
 
 Changing the bundle key doesn't rename or move anything. It starts a new, empty scope, and the old resources keep the old label.
@@ -228,6 +228,8 @@ spec:
 ```
 
 Apply publishes after the agent's variations exist, because Cadenya won't publish an agent without one. **So `state: published` needs at least one variation in the bundle, and validate checks that.** An archived agent with a `state` gets unarchived first.
+
+The same rule runs the other way. If an agent is published in Cadenya and the plan would delete its last variation, plan stops, even when the YAML leaves `state` out. Keep a variation, or set `state: draft`.
 
 Leave `state` out and the CLI leaves the state alone, the same as any other field you don't write. New agents start as drafts.
 
@@ -423,7 +425,7 @@ The exit code tells CI what kind of failure it's looking at:
 | --- | --- |
 | `0` | Success, including a plan with changes in it |
 | `1` | The run failed: an invalid bundle, an API error, or an apply that stopped partway |
-| `2` | The command was wrong: an unknown command or flag, a bad value, or a missing setting like the API key |
+| `2` | The command was wrong: an unknown command or flag, a bad value, a missing setting like the API key, an unreadable `cadenya.yaml`, or a `--report-file` path that can't be written |
 | `130` | Interrupted by SIGINT or SIGTERM |
 
 So a `2` is something to fix in the pipeline, and a `1` is something to fix in the bundle or the workspace.
@@ -434,9 +436,9 @@ stdout carries the result (text, or JSON with `--output json`). stderr carries s
 level=INFO msg="operation succeeded" command=apply bundle=support-tools workspace=development action=create kind=widget resource="widget support-chat" id=wgt_01M3JKX30GC81FGRDG0ZH0QP0H duration_ms=362 host=h2w5nrzmpn4f.widgets.cadenya.com
 ```
 
-`--log-level` takes `debug`, `info` (the default), `warn`, or `error`. `debug` adds each ownership check and each operation as it starts. `--log-format json` gives your log pipeline one JSON object per line. Both also read `CADENYA_LOG_LEVEL` and `CADENYA_LOG_FORMAT`. Neither ever logs the API key.
+`--log-level` takes `debug`, `info` (the default), `warn`, or `error`. `debug` adds each ownership check and each operation as it starts. `--log-format json` gives your log pipeline one JSON object per line. Both also read `CADENYA_LOG_LEVEL` and `CADENYA_LOG_FORMAT`. Logs pass through a filter that replaces the API key with `[REDACTED]`, so it can't reach stderr even inside an error message.
 
-`--output json` prints a versioned JSON report to stdout. `--report-file` writes the same report to a file, even when the run fails, so stdout can stay readable. Every report has `schemaVersion: 1` and `command`. A plan or apply adds `bundleKey`, `workspaceId`, `applied`, `summary` (creates, updates, deletes, detaches, and `stateChanges`), and `operations`, and each operation has a `completed` flag, so a failed apply shows how far it got. Failures add `error`, with the API key redacted.
+`--output json` prints a versioned JSON report to stdout. `--report-file` writes the same report to a file, even when the run fails, so stdout can stay readable. Every report has `schemaVersion: 1` and `command`. A plan or apply adds `bundleKey`, `workspaceId`, `applied`, `summary` (creates, updates, deletes, detaches, and `stateChanges`), and `operations`, and each operation has a `completed` flag, so a failed apply shows how far it got. Failures add `error`, with the API key redacted. When Cadenya rejects a request, the error carries the field and the reason it gave, like `spec.model_config.model_id: model_id must be a reference key`, not just `validation failed`.
 
 Reads and deletes retry up to `--retries` times. Creates and updates never retry, because the CLI can't tell whether a write that timed out landed.
 

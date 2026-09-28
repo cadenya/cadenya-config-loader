@@ -27,9 +27,10 @@ Before opening a pull request:
 ## Compatibility
 
 JSON reports carry `schemaVersion`. Add fields without removing or changing the
-meaning of existing fields within a version. The CLI exits 0 on success and 1 on
-failure. Preserve these contracts for CI consumers. Flag parsing errors may occur
-before a report can be created.
+meaning of existing fields within a version. Exit codes are part of the contract
+too: 0 for success, 1 for a failed run, 2 for usage and configuration errors, and
+130 when interrupted (see `internal/command/exit.go`). Preserve these for CI
+consumers. Flag parsing errors may occur before a report can be created.
 
 Resource YAML follows the pinned Cadenya SDK types. Update `go.mod`, `go.sum`,
 `NOTICE`, and dependency licenses together. Preserve API-owned secret and Liquid

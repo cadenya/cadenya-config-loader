@@ -72,7 +72,11 @@ func Run(ctx context.Context, version string, getenv func(string) string, out, e
 		if cliErr == nil {
 			return fmt.Errorf("CLI did not produce a JSON report: %w", err)
 		}
-		result = command.Report{SchemaVersion: 1, Command: mode, Error: cliErr.Error()}
+		message := cliErr.Error()
+		if key := getenv("INPUT_API_KEY"); key != "" {
+			message = strings.ReplaceAll(message, key, "[REDACTED]")
+		}
+		result = command.Report{SchemaVersion: 1, Command: mode, Error: message}
 		data, err = json.Marshal(result)
 		if err != nil {
 			return err

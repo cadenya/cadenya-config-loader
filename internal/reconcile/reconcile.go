@@ -124,10 +124,12 @@ func Build(ctx context.Context, c *cadenya.Client, b *config.Bundle, bundle, wor
 	}
 	var removed []*remote
 	retiredIDs := map[string]bool{}
+	retired := map[string]*remote{}
 	for key, r := range current {
 		if b.Resources[key] == nil {
 			removed = append(removed, r)
 			retiredIDs[r.ID] = true
+			retired[r.ID] = r
 		}
 	}
 	sort.Slice(removed, func(i, j int) bool {
@@ -142,12 +144,41 @@ func Build(ctx context.Context, c *cadenya.Client, b *config.Bundle, bundle, wor
 			return nil, fmt.Errorf("check delete %s: %w", r.Key, explain(err))
 		}
 	}
+	if len(removed) > 0 {
+		log.Debug("checking the workspace for outside references to deleted resources", "deletes", len(removed))
+		others, err := scanOutside(ctx, c, bundle, retired)
+		if err != nil {
+			return nil, explain(err)
+		}
+		// Cadenya won't delete a published agent's last variation. Say so now,
+		// before any write, rather than after the rest of the apply.
+		for _, r := range b.Sorted(config.Agent) {
+			old := current[r.Key]
+			if old == nil || old.State != remotePublished || r.State == config.StateDraft {
+				continue
+			}
+			kept := others.variations[old.ID]
+			for key := range b.Resources {
+				if key.Kind == config.Variation && key.Parent == r.ExternalID {
+					kept++
+				}
+			}
+			if kept == 0 {
+				return nil, fmt.Errorf("%s: this apply would delete every variation of a published agent; keep one, or set state: draft", r.File)
+			}
+		}
+	}
 	// Agents still bound to a surviving widget, by canonical ID.
 	bound := map[string]bool{}
 	for key, r := range current {
-		if spec, ok := r.Spec.(*cadenya.WidgetSpec); ok && key.Kind == config.Widget && b.Resources[key] != nil && spec != nil {
-			bound[spec.AgentID] = true
+		if key.Kind != config.Widget || b.Resources[key] == nil {
+			continue
 		}
+		spec, ok := r.Spec.(*cadenya.WidgetSpec)
+		if !ok || spec == nil {
+			return nil, fmt.Errorf("%s has no spec in API response", key)
+		}
+		bound[spec.AgentID] = true
 	}
 	// Late deletes wait for step 6. Anything a late variation assigns must be
 	// detached before step 3 deletes it.
@@ -232,11 +263,16 @@ func Build(ctx context.Context, c *cadenya.Client, b *config.Bundle, bundle, wor
 			publishes = append(publishes, &Operation{Action: "publish", Key: r.Key, ID: id})
 		}
 	}
-	for _, r := range removed {
-		if r.Key.Kind == config.Agent && r.State == remotePublished {
-			p.add(&Operation{Action: "unpublish", Key: r.Key, ID: r.ID})
+	// A published agent being deleted is unpublished right before its
+	// variations go. A late one waits until its widget has moved off it.
+	unpublish := func(early bool) {
+		for _, r := range removed {
+			if r.Key.Kind == config.Agent && r.State == remotePublished && late(r) != early {
+				p.add(&Operation{Action: "unpublish", Key: r.Key, ID: r.ID})
+			}
 		}
 	}
+	unpublish(true)
 	for _, r := range removed {
 		if !late(r) {
 			p.add(&Operation{Action: "delete", Key: r.Key, ID: r.ID, remote: r})
@@ -256,6 +292,7 @@ func Build(ctx context.Context, c *cadenya.Client, b *config.Bundle, bundle, wor
 	for _, op := range publishes {
 		p.add(op)
 	}
+	unpublish(false)
 	for _, r := range removed {
 		if late(r) {
 			p.add(&Operation{Action: "delete", Key: r.Key, ID: r.ID, remote: r})

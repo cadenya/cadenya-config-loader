@@ -131,6 +131,9 @@ func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
 			if state := r.URL.Query().Get("state"); state != "" && v.Body["state"] != state {
 				continue
 			}
+			if states := r.URL.Query()["states"]; len(states) > 0 && !contains(states, fmt.Sprint(v.Body["state"])) {
+				continue
+			}
 			if agent := r.URL.Query().Get("agentId"); agent != "" && v.Body["spec"].(map[string]any)["agentId"] != agent {
 				continue
 			}
@@ -247,6 +250,15 @@ func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
 		f.items[id] = v
 		json.NewEncoder(w).Encode(v.Body)
 	case "DELETE":
+		if collection == "variations" {
+			for _, other := range f.items {
+				if other.Collection == "widgets" && other.Body["spec"].(map[string]any)["variationId"] == id {
+					w.WriteHeader(400)
+					io.WriteString(w, `{"code":3,"message":"variation is pinned by a widget"}`)
+					return
+				}
+			}
+		}
 		if collection == "variations" && f.items[parent].Body["state"] == "STATE_PUBLISHED" && f.children(parent, "variations") == 1 {
 			w.WriteHeader(400)
 			io.WriteString(w, `{"code":9,"message":"cannot delete the last variation of a published agent"}`)
@@ -285,6 +297,15 @@ func (f *fixture) serve(w http.ResponseWriter, r *http.Request) {
 		f.t.Errorf("unexpected method %s", r.Method)
 		w.WriteHeader(400)
 	}
+}
+
+func contains(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }
 
 // children counts stored children of parent in collection. Callers hold f.mu.

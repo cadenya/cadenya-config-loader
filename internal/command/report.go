@@ -35,6 +35,9 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	if file != nil {
 		defer os.Remove(file.Name())
 	}
+	if err != nil {
+		err = usageError{err} // An unusable --report-file destination.
+	}
 	if err == nil {
 		err = execute(ctx, cmd, result)
 	}

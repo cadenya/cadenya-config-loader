@@ -17,7 +17,14 @@
 - Widgets under `widgets/`, with `external_id:` agent and variation
   references, origin checks, and the embed host in reports. Agents bound to a
   widget outside the bundle are never deleted.
-- Structured `log/slog` logs on stderr (`--log-level`, `--log-format`).
+- API errors include the field violations and reasons Cadenya returns, such as
+  a missing scope, instead of only `validation failed`.
+- Plan refuses deletes that would break resources outside the bundle (an
+  assigned tool, memory layer, or sub-agent, a pinned variation, a bound agent)
+  and deletes that would strip a published agent of its last variation.
+- A delete that finds the resource already gone counts as done.
+- Structured `log/slog` logs on stderr (`--log-level`, `--log-format`), with the
+  API key redacted.
 - Exit codes: 1 for failed runs, 2 for usage and configuration errors, 130 when
   interrupted.
 - GitHub composite action with native outputs and job summaries.

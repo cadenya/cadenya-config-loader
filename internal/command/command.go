@@ -62,7 +62,7 @@ func usageErrorHandler(_ context.Context, _ *cli.Command, err error, _ bool) err
 }
 
 func execute(ctx context.Context, cmd *cli.Command, result *Report) error {
-	log, err := newLogger(cmd.String("log-level"), cmd.String("log-format"), cmd.Root().ErrWriter)
+	log, err := newLogger(cmd.String("log-level"), cmd.String("log-format"), cmd.String("api-key"), cmd.Root().ErrWriter)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func execute(ctx context.Context, cmd *cli.Command, result *Report) error {
 	}
 	s, err := config.ReadSettings(settingsPath, !cmd.IsSet("config"))
 	if err != nil {
-		return err
+		return usageError{err}
 	}
 	for _, field := range []struct {
 		flag   string

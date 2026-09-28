@@ -76,13 +76,7 @@ runs:
   steps:
     - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
-        log-level:
-    description: 'Log level on stderr: debug, info, warn, or error'
-    default: info
-  log-format:
-    description: 'Log format on stderr: text or json'
-    default: text
-  go-version: ${{ inputs.go-version }}
+        go-version: ${{ inputs.go-version }}
         cache: true
         cache-dependency-path: ${{ github.action_path }}/go.sum
     - name: Build Cadenya CLI

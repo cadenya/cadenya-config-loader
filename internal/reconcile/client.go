@@ -187,7 +187,18 @@ func parentKey(k config.Key) config.Key {
 	return config.Key{Kind: kind, ExternalID: k.Parent}
 }
 
+// deleteRemote deletes r. A 404 counts as success: the SDK retries DELETE, and
+// a retry after a lost response finds the resource already gone.
 func deleteRemote(ctx context.Context, c *cadenya.Client, r *remote) error {
+	err := deleteByKind(ctx, c, r)
+	var apiErr *cadenya.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+		return nil
+	}
+	return err
+}
+
+func deleteByKind(ctx context.Context, c *cadenya.Client, r *remote) error {
 	switch r.Key.Kind {
 	case config.ToolSet:
 		return c.ToolSets().Delete(ctx, r.ID, nil)
@@ -408,4 +419,66 @@ func checkChildren(ctx context.Context, c *cadenya.Client, r *remote, bundle str
 		}
 	}
 	return nil
+}
+
+// outside describes what lies outside the bundle but depends on it.
+type outside struct {
+	// variations counts variations outside the bundle, by canonical agent ID.
+	variations map[string]int
+}
+
+// scanOutside lists every agent, variation, and widget in the workspace and
+// fails if one outside the bundle refers to a resource the plan deletes. The
+// API refuses some of those deletes (an assigned memory layer, a pinned
+// variation) and allows others (a tool), but either way deleting it would
+// break a resource this bundle doesn't own. It lists the whole workspace, so
+// Build calls it only when the plan deletes something.
+func scanOutside(ctx context.Context, c *cadenya.Client, bundle string, retired map[string]*remote) (*outside, error) {
+	result := &outside{variations: map[string]int{}}
+	name := func(id string) string { return retired[id].Key.String() }
+	for _, state := range []cadenya.AgentServiceListAgentsState{"STATE_DRAFT", "STATE_PUBLISHED", "STATE_ARCHIVED"} {
+		page, err := c.Agents().List(ctx, &cadenya.AgentListParams{State: &state})
+		agents, err := all(ctx, page, err)
+		if err != nil {
+			return nil, fmt.Errorf("list agents: %w", err)
+		}
+		for _, a := range agents {
+			if a.Metadata == nil {
+				return nil, fmt.Errorf("listed agent has no metadata")
+			}
+			page, err := c.Agents().Variations().List(ctx, a.Metadata.ID, nil)
+			variations, err := all(ctx, page, err)
+			if err != nil {
+				return nil, fmt.Errorf("list variations in %s: %w", a.Metadata.ID, err)
+			}
+			for _, v := range variations {
+				if v.Metadata == nil || v.Metadata.Labels[config.BundleLabel] == bundle {
+					continue
+				}
+				result.variations[a.Metadata.ID]++
+				if v.Spec == nil {
+					continue
+				}
+				for _, ref := range config.AssignmentTargets(v.Spec) {
+					if retired[*ref.ID] != nil {
+						return nil, fmt.Errorf("cannot delete %s: variation %s of agent %s, outside bundle %q, assigns it", name(*ref.ID), v.Metadata.ID, a.Metadata.ID, bundle)
+					}
+				}
+			}
+		}
+	}
+	page, err := c.Widgets().List(ctx, nil)
+	widgets, err := all(ctx, page, err)
+	if err != nil {
+		return nil, fmt.Errorf("list widgets: %w", err)
+	}
+	for _, w := range widgets {
+		if w.Metadata == nil || w.Metadata.Labels[config.BundleLabel] == bundle || w.Spec == nil {
+			continue
+		}
+		if w.Spec.VariationID != nil && retired[*w.Spec.VariationID] != nil {
+			return nil, fmt.Errorf("cannot delete %s: widget %s, outside bundle %q, pins it", name(*w.Spec.VariationID), w.Metadata.ID, bundle)
+		}
+	}
+	return result, nil
 }
