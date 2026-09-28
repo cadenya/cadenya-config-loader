@@ -1,4 +1,5 @@
-# Copy to .github/workflows/cadenya.yaml in a consuming repository.
+# Copy to .github/workflows/cadenya.yaml. The workspace and bundle key come
+# from cadenya.yaml, so the workflow doesn't repeat them.
 name: Configure Cadenya
 on:
   pull_request:
@@ -16,7 +17,8 @@ on:
 permissions:
   contents: read
 jobs:
-  # Pull requests get an offline check. It needs no API key, so it's safe for forks.
+  # Every pull request gets an offline check. It needs no API key, so it's safe
+  # for forks.
   validate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -26,11 +28,22 @@ jobs:
       - uses: cadenya/cadenya-config-loader@v0.1.2
         with:
           command: validate
+  # Pull requests from branches in this repository also get a plan against the
+  # workspace. Forks can't read secrets, so they stop at validate.
+  plan:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cadenya/cadenya-config-loader@v0.1.2
+        with:
+          command: plan
+          api-key: ${{ secrets.CADENYA_API_KEY }}
   apply:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: development
-    # Serialize deployments for this workspace and bundle. Never cancel an apply in progress.
+    # One apply at a time for this workspace and bundle. Never cancel one halfway.
     concurrency:
       group: cadenya-development-support-tools
       cancel-in-progress: false
@@ -41,5 +54,3 @@ jobs:
         with:
           command: apply
           api-key: ${{ secrets.CADENYA_API_KEY }}
-          workspace-id: development
-          bundle-key: support-tools
