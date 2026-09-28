@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 (2026-09-27)
 
 - The repository is now a GitHub Action wrapper around the unified `cadenya` CLI.
 - The Action downloads and verifies a pinned `cadenya/cadenya-cli` release and
