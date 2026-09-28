@@ -1,0 +1,3 @@
+# Check out text with LF everywhere. Windows runners otherwise convert to CRLF,
+# and gofmt flags every Go file.
+* text=auto eol=lf
