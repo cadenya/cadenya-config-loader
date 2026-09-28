@@ -31,7 +31,7 @@ gh attestation verify cadenya-config_VERSION_linux_amd64.tar.gz \
 Alternatively, with Go installed:
 
 ```sh
-# Set VERSION to a published version such as v0.1.0, or a reviewed commit hash.
+# Set VERSION to a published version such as v0.1.1, or a reviewed commit hash.
 go install "github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@${VERSION:?set VERSION}"
 ```
 

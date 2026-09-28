@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Pin a release tag, or a reviewed commit SHA for stricter supply-chain control.
-      - uses: cadenya/cadenya-config-loader@v0.1.0
+      - uses: cadenya/cadenya-config-loader@v0.1.1
         with:
           command: validate
   apply:
@@ -36,7 +36,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
-      - uses: cadenya/cadenya-config-loader@v0.1.0
+      - uses: cadenya/cadenya-config-loader@v0.1.1
         id: cadenya
         with:
           command: apply

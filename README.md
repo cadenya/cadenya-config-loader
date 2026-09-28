@@ -9,13 +9,13 @@ It's a Go CLI built on [urfave/cli v3](https://cli.urfave.org/v3/getting-started
 Download the archive for your platform from [the latest release](https://github.com/cadenya/cadenya-config-loader/releases/latest). Each one holds the binary, the docs, and the example bundle. Check it against `checksums.txt`, and against its build provenance:
 
 ```sh
-gh release download v0.1.0 -R cadenya/cadenya-config-loader -p 'cadenya-config_0.1.0_linux_amd64.tar.gz' -p checksums.txt
+gh release download v0.1.1 -R cadenya/cadenya-config-loader -p 'cadenya-config_0.1.1_linux_amd64.tar.gz' -p checksums.txt
 sha256sum --check --ignore-missing checksums.txt
-gh attestation verify cadenya-config_0.1.0_linux_amd64.tar.gz --repo cadenya/cadenya-config-loader
-tar -xzf cadenya-config_0.1.0_linux_amd64.tar.gz
+gh attestation verify cadenya-config_0.1.1_linux_amd64.tar.gz --repo cadenya/cadenya-config-loader
+tar -xzf cadenya-config_0.1.1_linux_amd64.tar.gz
 ```
 
-(With Go 1.22 or newer, `go install github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@v0.1.0` works too.) [docs/ci.md](docs/ci.md) covers macOS and Windows.
+(With Go 1.22 or newer, `go install github.com/cadenya/cadenya-config-loader/cmd/cadenya-config@v0.1.1` works too.) [docs/ci.md](docs/ci.md) covers macOS and Windows.
 
 Validate the example bundle first. Validation never touches the API:
 
