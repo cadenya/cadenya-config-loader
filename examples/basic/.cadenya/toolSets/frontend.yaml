@@ -1,0 +1,9 @@
+metadata:
+  name: Frontend tools
+  labels:
+    team: frontend
+spec:
+  description: Tools executed by the frontend application
+  adapter:
+    type: bare
+    bare: {}

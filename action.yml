@@ -1,0 +1,120 @@
+name: Configure Cadenya
+description: Validate, plan, or apply a source-controlled Cadenya workspace bundle
+branding:
+  icon: terminal
+  color: purple
+inputs:
+  command:
+    description: 'Operation: validate, plan, or apply'
+    default: plan
+  api-key:
+    description: Cadenya API key (falls back to CADENYA_API_KEY)
+    required: false
+  workspace-id:
+    description: Workspace ID or alias (overrides environment and cadenya.yaml)
+    required: false
+  bundle-key:
+    description: Bundle ownership label (overrides environment and cadenya.yaml)
+    required: false
+  base-url:
+    description: API origin without /v1 (overrides environment and cadenya.yaml)
+    required: false
+  directory:
+    description: Repository root containing cadenya.yaml and .cadenya
+    default: .
+  config:
+    description: Settings path relative to directory
+    required: false
+  resource-dir:
+    description: Resource path relative to directory
+    required: false
+  allow-empty:
+    description: Allow apply to delete an entire bundle when the resource tree is empty
+    default: 'false'
+  timeout:
+    description: Timeout per HTTP request, in Go duration syntax
+    default: 60s
+  operation-timeout:
+    description: Deadline for the complete plan or apply
+    default: 10m
+  retries:
+    description: Retries for idempotent requests; creates and updates are never retried
+    default: '2'
+  log-level:
+    description: 'Log level on stderr: debug, info, warn, or error'
+    default: info
+  log-format:
+    description: 'Log format on stderr: text or json'
+    default: text
+  go-version:
+    description: Go version used to build the CLI from this action revision
+    default: stable
+outputs:
+  result:
+    description: JSON result, including operations and completion status
+    value: ${{ steps.run.outputs.result }}
+  report-path:
+    description: Path to the JSON result file on the runner
+    value: ${{ steps.run.outputs.report-path }}
+  creates:
+    description: Number of planned creates
+    value: ${{ steps.run.outputs.creates }}
+  updates:
+    description: Number of planned updates
+    value: ${{ steps.run.outputs.updates }}
+  deletes:
+    description: Number of planned deletions
+    value: ${{ steps.run.outputs.deletes }}
+  detaches:
+    description: Number of variations needing assignment removal before deletion
+    value: ${{ steps.run.outputs.detaches }}
+  state-changes:
+    description: Number of planned agent publishes, unpublishes, and unarchives
+    value: ${{ steps.run.outputs.state-changes }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        log-level:
+    description: 'Log level on stderr: debug, info, warn, or error'
+    default: info
+  log-format:
+    description: 'Log format on stderr: text or json'
+    default: text
+  go-version: ${{ inputs.go-version }}
+        cache: true
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+    - name: Build Cadenya CLI
+      id: build
+      shell: bash
+      env:
+        CADENYA_ACTION_PATH: ${{ github.action_path }}
+        GOWORK: 'off'
+      run: |
+        set -euo pipefail
+        build_dir="$(mktemp -d "$RUNNER_TEMP/cadenya-build.XXXXXX")"
+        cd "$CADENYA_ACTION_PATH"
+        go build -mod=readonly -buildvcs=false -trimpath -o "$build_dir/" ./cmd/cadenya-config-action
+        printf 'binary=%s\n' "$build_dir/cadenya-config-action$(go env GOEXE)" >> "$GITHUB_OUTPUT"
+    - name: Run Cadenya CLI
+      id: run
+      shell: bash
+      env:
+        CADENYA_ACTION_PATH: ${{ github.action_path }}
+        CADENYA_ACTION_BINARY: ${{ steps.build.outputs.binary }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
+        INPUT_WORKSPACE_ID: ${{ inputs.workspace-id }}
+        INPUT_BUNDLE_KEY: ${{ inputs.bundle-key }}
+        INPUT_BASE_URL: ${{ inputs.base-url }}
+        INPUT_DIRECTORY: ${{ inputs.directory }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_RESOURCE_DIR: ${{ inputs.resource-dir }}
+        INPUT_ALLOW_EMPTY: ${{ inputs.allow-empty }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_OPERATION_TIMEOUT: ${{ inputs.operation-timeout }}
+        INPUT_RETRIES: ${{ inputs.retries }}
+        INPUT_LOG_LEVEL: ${{ inputs.log-level }}
+        INPUT_LOG_FORMAT: ${{ inputs.log-format }}
+      run: '"$CADENYA_ACTION_BINARY"'

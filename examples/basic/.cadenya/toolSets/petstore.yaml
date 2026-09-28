@@ -1,0 +1,9 @@
+metadata:
+  name: Swagger Petstore
+spec:
+  description: Find pets, place orders, and manage the store inventory
+  adapter:
+    type: openapi
+    openapi:
+      type: url
+      url: https://petstore3.swagger.io/api/v3/openapi.json

@@ -1,0 +1,5 @@
+metadata:
+  name: Support playbooks
+spec:
+  type: MEMORY_LAYER_TYPE_SKILLS
+  description: How the assistant handles common configuration questions

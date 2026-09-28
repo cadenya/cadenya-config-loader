@@ -1,0 +1,6 @@
+externalId: cadenya-assistant
+state: published
+metadata:
+  name: Ask Cadenya
+spec:
+  description: Answer questions about Cadenya and the current form

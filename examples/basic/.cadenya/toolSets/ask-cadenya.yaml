@@ -1,0 +1,8 @@
+metadata:
+  name: Cadenya documentation
+spec:
+  description: Search Cadenya documentation through MCP
+  adapter:
+    type: mcp
+    mcp:
+      url: https://cadenya.com/docs/mcp

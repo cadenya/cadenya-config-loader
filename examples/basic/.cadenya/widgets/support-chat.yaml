@@ -1,0 +1,6 @@
+metadata:
+  name: Support chat
+spec:
+  agentId: external_id:cadenya-assistant
+  originAllowlist:
+    - http://localhost:3000

@@ -1,0 +1,10 @@
+metadata:
+  name: Set up a tool set
+spec:
+  key: skills/tool-set-setup
+  description: Use when someone asks how to connect an API or MCP server to an agent.
+  content: |
+    1. Ask whether the API has an OpenAPI spec or an MCP server.
+    2. For OpenAPI, point a tool set at the spec URL. Cadenya syncs it hourly.
+    3. For MCP, use the server URL. Tools sync once the tool set exists.
+    4. Filter the tools before assigning the tool set to a variation.

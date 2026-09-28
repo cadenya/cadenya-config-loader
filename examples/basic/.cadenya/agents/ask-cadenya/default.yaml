@@ -1,0 +1,17 @@
+metadata:
+  name: Default
+spec:
+  systemPromptTemplate: |
+    Help the user configure Cadenya. Consult the documentation tools for API
+    questions, and fetch the current form state when needed.
+  modelConfig:
+    modelId: getting-started-key.openai-gpt-4-1
+    temperature: 0
+  assignments:
+    - type: toolSetId
+      toolSetId: external_id:ask-cadenya
+    - type: toolId
+      toolId: external_id:frontend/fetch-form-state
+  memoryLayerAssignments:
+    - memoryLayerId: external_id:playbooks
+      position: 0

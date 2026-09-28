@@ -1,0 +1,11 @@
+metadata:
+  name: Fetch form state
+spec:
+  description: Return the current form fields and their values
+  parameters:
+    type: object
+    properties: {}
+    additionalProperties: false
+  config:
+    type: bare
+    bare: {}
